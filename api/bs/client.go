@@ -6,12 +6,17 @@ import (
 	"net"
 	"regexp"
 	"strconv"
+	"time"
 
 	"github.com/oswaldoooo/cmirco/kits"
 )
 
 const (
 	url_reg = "^bs(t|u|)://(.*):([\\d]{1,5})/(.*)"
+)
+
+var (
+	Max_Cut_Time = 10
 )
 
 type BsClient struct {
@@ -25,7 +30,8 @@ type BsClient struct {
 	Buffer_Size int
 	req         Request
 	rep         chan response
-	msgchan     chan any
+	msgchan     chan any  //the content need to send
+	lastconn    time.Time //the last one connection time
 }
 
 // return nil is create client failed,[fullurl,socket_type,address,port,path]
@@ -77,6 +83,16 @@ func (s *BsClient) GetBack() error {
 	fmt.Print("getback end")
 	return err
 }
+func BackEnd(cl *BsClient) {
+	for {
+		time.Sleep(time.Duration(5) * time.Second)
+		if time.Since(cl.lastconn) > time.Duration(Max_Cut_Time)*time.Second {
+			//close connection
+			cl.isclose = true
+			break
+		}
+	}
+}
 
 func Start(cl *BsClient, errchan chan<- error) {
 	var address string
@@ -85,6 +101,7 @@ func Start(cl *BsClient, errchan chan<- error) {
 	} else {
 		address = cl.Address + ":" + strconv.Itoa(cl.Port)
 	}
+	go BackEnd(cl)
 	go kits.Dial(cl.Socket_Type, address, cl, cl.msgchan, errchan)
 }
 func Stop(cl *BsClient) {
@@ -93,10 +110,11 @@ func Stop(cl *BsClient) {
 func (s *BsClient) Do(v any, rep any) error {
 	content, err := json.Marshal(v)
 	if err == nil {
-		s.req.Content = content
+		s.req.Content = string(content)
 	}
 	s.msgchan <- s.req
 	trep := <-s.rep
-	err = json.Unmarshal(trep.Content, rep)
+	err = json.Unmarshal([]byte(trep.Content), rep)
+	s.lastconn = time.Now()
 	return err
 }

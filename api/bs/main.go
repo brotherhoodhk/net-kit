@@ -11,6 +11,7 @@ import (
 // signal
 const (
 	Deregister_Sig = 2
+	max_cut_time   = 10
 )
 
 type Handler func(*Request, *Response) error
@@ -21,7 +22,7 @@ var NeedRegister = false
 type Request struct {
 	Type    string `json:"type"`
 	Path    string `json:"path"`
-	Content []byte `json:"content"`
+	Content string `json:"content"`
 }
 type Response struct {
 	close *bool
@@ -37,8 +38,13 @@ type BSServer struct {
 }
 
 func (s *BSServer) Decode(content []byte) error {
-	return json.Unmarshal(content, &s.req)
-
+	// debugline
+	fmt.Println("accpet from client:",string(content))
+	err:=json.Unmarshal(content, &s.req)
+	if err!=nil{
+		fmt.Printf("[error] %s\n",err.Error())
+	}
+	return err
 }
 
 func (s *BSServer) NeedSave() bool {
@@ -88,19 +94,19 @@ func (s *BSServer) ClientIP() string {
 }
 
 func (s *Request) ShouldBind(v any) error {
-	return json.Unmarshal(s.Content, v)
+	return json.Unmarshal([]byte(s.Content), v)
 }
 
 type response struct {
 	Type    string `json:"type"`
-	Content []byte `json:"content"`
+	Content string `json:"content"`
 }
 
 func (s *Response) Write(typename string, v any) error {
 	content, err := json.MarshalIndent(v, "", "\t")
 	if err == nil {
 		var finalcontent []byte
-		finalcontent, err = json.MarshalIndent(&response{Type: typename, Content: content}, "", "\t")
+		finalcontent, err = json.MarshalIndent(&response{Type: typename, Content: string(content)}, "", "\t")
 		if err == nil {
 			_, err = s.con.Write(finalcontent)
 		}
